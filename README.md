@@ -9,6 +9,49 @@ Tomorrow you can use the same tool with medical books, college notes, company ma
 
 ---
 
+## How to use this repo - 2 Stages
+
+This repo has **2 stages**. Do not skip Stage 1.
+
+### Stage 1: Build Index on RunPod GPU
+
+Run these on **RunPod GPU** (RTX 4090 recommended). Building needs GPU.
+
+Why GPU? OCR correction + embeddings are slow on CPU.
+
+```bash
+python scripts/ocr_ai.py
+python scripts/chunk_text.py
+python scripts/embed_chunks.py
+python scripts/build_faiss.py
+```
+
+Paths in Stage 1 are `/workspace/...` - that is RunPod.
+
+Outputs from Stage 1:
+- `legal_index.faiss`
+- `legal_meta.json`
+
+Download these 2 files from RunPod to your PC.
+
+### Stage 2: Ask Questions Locally on PC
+
+Run this on your **PC**, no GPU needed.
+
+Put the 2 files from Stage 1 into:
+```
+C:/legal_rag/
+```
+
+Then run:
+```bash
+python scripts/legal_rag.py
+```
+
+Ask your question. It answers only from your PDFs.
+
+---
+
 ## What does it do?
 
 You give it PDFs. It reads them. It answers your questions **only from those PDFs**.
@@ -34,22 +77,24 @@ This test does **not** give legal advice. It only finds text from your PDFs.
 
 ---
 
-## How it works
+## Pipeline
 
 ```
-Your PDFs
+Your PDFs (RunPod)
   ↓
-1. Extract text (OCR + native text)
+1. Extract text (OCR + native text) - scripts/ocr_ai.py - RunPod
   ↓
-2. Fix OCR errors with local LLM
+2. Fix OCR errors with local LLM - scripts/ocr_ai.py - RunPod
   ↓
-3. Split into small chunks
+3. Split into small chunks - scripts/chunk_text.py - RunPod
   ↓
-4. Make embeddings (local)
+4. Make embeddings (local) - scripts/embed_chunks.py - RunPod
   ↓
-5. Save in FAISS index
+5. Save in FAISS index - scripts/build_faiss.py - RunPod
   ↓
-6. Ask question -> Find best chunks -> Local LLM answers only from those chunks
+Download index.faiss + meta.json to PC
+  ↓
+6. Ask question -> Find best chunks -> Local LLM answers only from those chunks - scripts/legal_rag.py - PC
 ```
 
 If answer is not in your PDFs, it says:
@@ -60,88 +105,6 @@ It does not guess. It does not use outside knowledge.
 
 ---
 
-## Use it with your own subject - 3 steps
-
-### Step 1: Put your PDFs
-
-```
-data/<your-subject>/your-files.pdf
-```
-
-Example for test:
-```
-data/karnataka-legal/*.pdf
-```
-
-### Step 2: Edit config
-
-Open `config.yaml` and change only these 3 lines:
-
-```yaml
-subject_name: "karnataka-legal"
-docs_folder: "data/karnataka-legal"
-answer_rule: "Quote verbatim. Use only retrieved text."
-```
-
-For your own subject, change to:
-
-```yaml
-subject_name: "my-college-notes"
-docs_folder: "data/my-college-notes"
-```
-
-### Step 3: Run pipeline
-
-```bash
-python scripts/extract_text.py
-python scripts/chunk_text.py
-python scripts/embed_chunks.py
-python scripts/build_index.py
-python scripts/query.py
-```
-
-That's it. Same tool, new Knowledge DB.
-
----
-
-## Pipeline Details
-
-### 1. Extract Text
-- Handles scanned PDFs, image + text pages, tables, portrait + landscape
-- Tools: `pdfplumber`, `pytesseract`, OpenCV
-- Script: `scripts/extract_text.py`
-
-### 2. Fix OCR Errors (Offline LLM)
-- Fixes common OCR errors like `rn -> m`, `cl -> d`, broken words
-- Uses local LLM only. No OpenAI / Gemini API.
-- Script: `scripts/extract_text.py`
-
-### 3. Chunk Text
-- Splits by headings, paragraphs, then token limit
-- Keeps structure, so retrieval stays correct
-- No hard-coded legal sections. Separators come from `config.yaml`
-- Script: `scripts/chunk_text.py`
-
-### 4. Make Embeddings (Local)
-- Uses `nomic-embed-text` via Ollama, fully offline
-- One embedding per chunk
-- Script: `scripts/embed_chunks.py`
-
-### 5. Build FAISS Index
-- Stores embeddings in FAISS locally
-- Metadata (chunk text + source file) stored separately
-- Script: `scripts/build_index.py`
-- Outputs (not pushed to Git):
-  - `legal_index.faiss` -> renamed to `index.faiss`
-  - `legal_meta.json` -> renamed to `meta.json`
-
-### 6. Ask Questions (RAG)
-- Your question -> embedding -> FAISS search -> best chunks -> local LLM
-- LLM rule: Use only retrieved text. Quote verbatim. No guessing.
-- Script: `scripts/query.py`
-
----
-
 ## Technologies Used
 
 - Python 3.10+
@@ -149,21 +112,21 @@ That's it. Same tool, new Knowledge DB.
 - FAISS
 - Ollama (local LLM runner)
 - nomic-embed-text
-- Open-source local LLMs only
+- Open-source local LLMs only (phi4-mini for correction, mistral for query)
 
 ---
 
 ## Why Offline & Open-Source?
 
 - No API rate limits
-- No data leakage - your PDFs never leave your computer
+- No data leakage - your PDFs never leave your computer / RunPod
 - Full control over embeddings and answers
 - Reproducible
 - Cheap for large document sets
 
 ---
 
-## Project Status
+## Current Status
 
 - Text extraction: ✅ Complete
 - OCR correction: ✅ Complete
@@ -171,6 +134,8 @@ That's it. Same tool, new Knowledge DB.
 - Embeddings: ✅ Complete
 - FAISS index: ✅ Complete
 - Query / RAG: 🧪 Testing / tuning
+
+Note: Current code is tuned for the Karnataka legal test (prompts mention legal, chunking looks for CHAPTER / SECTION). The concept is generic, code will be made fully generic in next update.
 
 ---
 
@@ -180,6 +145,7 @@ That's it. Same tool, new Knowledge DB.
 - Tables may lose some visual structure
 - Tool finds text, it does not interpret or advise
 - Always verify against your original PDFs
+- This repo builds only FAISS index. For FAISS + BM25 hybrid index used in Colab repo, you need an extra hybrid build step.
 
 ---
 
@@ -195,5 +161,5 @@ For the Karnataka legal test: verify all answers against official Acts.
 
 ## Repo Map
 
-- `legal-rag-system` (this repo) = Main engine. Generic. Works with any subject.
-- `karnataka-legal-rag-assistant` = Colab demo of this engine, using Karnataka legal as test data.
+- `legal-rag-system` (this repo) = Build on RunPod GPU, Use on PC. Main pipeline.
+- `karnataka-legal-rag-assistant` = Fully on Google Colab. Uses ready-made index. No build step.
