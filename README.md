@@ -3,6 +3,8 @@
 Build your own Knowledge DB from your own PDFs. Offline. No cloud. No API key.
 
 This is **not** a legal tool.
+I am experimenting with Karnataka legal as a test subject. Legal is not the main product. The RAG system is the main product.
+
 
 Karnataka legal laws are used here only as **one test example** to check if the tool works.
 Tomorrow you can use the same tool with medical books, college notes, company manuals, or any other PDFs.
@@ -161,5 +163,5 @@ For the Karnataka legal test: verify all answers against official Acts.
 
 ## Repo Map
 
-- `legal-rag-system` (this repo) = Build on RunPod GPU, Use on PC. Main pipeline.
-- `karnataka-legal-rag-assistant` = Fully on Google Colab. Uses ready-made index. No build step.
+- `generic-rag-system` (this repo) = Build on RunPod GPU, Use on PC. Main pipeline.
+- `generic-rag-colab` = Fully on Google Colab. Uses ready-made index. No build step.
