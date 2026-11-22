@@ -1,318 +1,199 @@
-# Legal RAG System (Offline, OCR-based)
+# Generic Offline RAG System
 
-This project implements a fully offline **Retrieval-Augmented Generation (RAG)** system for Indian legal Acts, Rules, and Regulations using open-source models only.
+Build your own Knowledge DB from your own PDFs. Offline. No cloud. No API key.
 
-The system was designed to avoid API rate limits, data leakage, and cloud dependency issues by using **local LLMs via Ollama**, **FAISS vector search**, and **OCR-based text extraction**.
+This is **not** a legal tool.
 
----
-
-## Problem Statement
-
-Government legal PDFs often:
-- Contain scanned images instead of text
-- Mix portrait and landscape pages
-- Include complex tables and section formatting
-- Produce OCR spelling errors
-
-This project builds a robust pipeline to:
-1. Extract text accurately
-2. Correct OCR errors using LLMs
-3. Chunk legal text semantically
-4. Store embeddings locally
-5. Answer legal questions strictly from source Acts
+Karnataka legal laws are used here only as **one test example** to check if the tool works.
+Tomorrow you can use the same tool with medical books, college notes, company manuals, or any other PDFs.
 
 ---
 
-## End-to-End Pipeline
+## What does it do?
 
-### 1. PDF Text Extraction (OCR + Native Text)
-- Used `pdfplumber`, `pytesseract`, and OpenCV
-- Handles:
-  - Image-only PDFs
-  - Mixed image + text pages
-  - Tables
-  - Portrait and landscape layouts
+You give it PDFs. It reads them. It answers your questions **only from those PDFs**.
 
-**Script:** `scripts/ocr_ai.py`
+Example:
+- Put Karnataka property laws PDFs in -> Ask about Karnataka property law
+- Put college notes PDFs in -> Ask about your college notes
+- Put company manual PDFs in -> Ask about your company manual
 
----
-
-### 2. OCR Error Correction using LLM (Offline)
-- OCR output may contain errors like:
-  - `rn → m`
-  - `cl → d`
-  - broken words
-- Corrected using **open-source LLMs via Ollama**
-- Avoided OpenAI/Gemini APIs due to rate limits
-
-**Script:** `scripts/ocr_ai.py`  
-**Models used:** `phi4-mini`, `mistral`, fallback local models
+Same tool. Different data.
 
 ---
 
-### 3. Recursive + Semantic Chunking
-- Legal text chunked by:
-  - Section boundaries
-  - Sub-sections and clauses
-  - Token limits
-- Preserves legal structure for accurate retrieval
+## Test Example Included: Karnataka Legal
 
-**Script:** `scripts/chunk_text.py`
+We test this tool with Karnataka property laws like KAOA, KAOR, KOFA, RERA, KCSA, TOPA, RDPR, IGR.
 
----
+Why this test?
+- Legal PDFs are hard: scanned pages, tables, mixed portrait + landscape, OCR spelling errors.
+- If the tool works here, it will work for simpler PDFs too.
 
-### 4. Embedding Generation (Local)
-- Used **nomic-embed-text** via Ollama
-- Fully offline embedding generation
-- One embedding per legal chunk
-
-**Script:** `scripts/embed_chunks.py`
+This test does **not** give legal advice. It only finds text from your PDFs.
 
 ---
 
-### 5. Vector Index Creation
-- Stored embeddings in **FAISS**
-- Metadata stored separately (chunk text + source)
+## How it works
 
-**Script:** `scripts/build_faiss.py`  
-**Outputs (ignored in Git):**
-- `legal_index.faiss`
-- `legal_meta.json`
+```
+Your PDFs
+  ↓
+1. Extract text (OCR + native text)
+  ↓
+2. Fix OCR errors with local LLM
+  ↓
+3. Split into small chunks
+  ↓
+4. Make embeddings (local)
+  ↓
+5. Save in FAISS index
+  ↓
+6. Ask question -> Find best chunks -> Local LLM answers only from those chunks
+```
+
+If answer is not in your PDFs, it says:
+
+> Not found in provided documents
+
+It does not guess. It does not use outside knowledge.
 
 ---
 
-### 6. Legal Question Answering (RAG)
-- User question → embedded → FAISS similarity search
-- Retrieved legal chunks passed to LLM
-- LLM instructed to:
-  - Quote **verbatim**
-  - Use **only retrieved text**
-  - Say *“Not found in provided documents”* if missing
+## Use it with your own subject - 3 steps
 
-**Script:** `scripts/legal_rag.py`
+### Step 1: Put your PDFs
+
+```
+data/<your-subject>/your-files.pdf
+```
+
+Example for test:
+```
+data/karnataka-legal/*.pdf
+```
+
+### Step 2: Edit config
+
+Open `config.yaml` and change only these 3 lines:
+
+```yaml
+subject_name: "karnataka-legal"
+docs_folder: "data/karnataka-legal"
+answer_rule: "Quote verbatim. Use only retrieved text."
+```
+
+For your own subject, change to:
+
+```yaml
+subject_name: "my-college-notes"
+docs_folder: "data/my-college-notes"
+```
+
+### Step 3: Run pipeline
+
+```bash
+python scripts/extract_text.py
+python scripts/chunk_text.py
+python scripts/embed_chunks.py
+python scripts/build_index.py
+python scripts/query.py
+```
+
+That's it. Same tool, new Knowledge DB.
+
+---
+
+## Pipeline Details
+
+### 1. Extract Text
+- Handles scanned PDFs, image + text pages, tables, portrait + landscape
+- Tools: `pdfplumber`, `pytesseract`, OpenCV
+- Script: `scripts/extract_text.py`
+
+### 2. Fix OCR Errors (Offline LLM)
+- Fixes common OCR errors like `rn -> m`, `cl -> d`, broken words
+- Uses local LLM only. No OpenAI / Gemini API.
+- Script: `scripts/extract_text.py`
+
+### 3. Chunk Text
+- Splits by headings, paragraphs, then token limit
+- Keeps structure, so retrieval stays correct
+- No hard-coded legal sections. Separators come from `config.yaml`
+- Script: `scripts/chunk_text.py`
+
+### 4. Make Embeddings (Local)
+- Uses `nomic-embed-text` via Ollama, fully offline
+- One embedding per chunk
+- Script: `scripts/embed_chunks.py`
+
+### 5. Build FAISS Index
+- Stores embeddings in FAISS locally
+- Metadata (chunk text + source file) stored separately
+- Script: `scripts/build_index.py`
+- Outputs (not pushed to Git):
+  - `legal_index.faiss` -> renamed to `index.faiss`
+  - `legal_meta.json` -> renamed to `meta.json`
+
+### 6. Ask Questions (RAG)
+- Your question -> embedding -> FAISS search -> best chunks -> local LLM
+- LLM rule: Use only retrieved text. Quote verbatim. No guessing.
+- Script: `scripts/query.py`
 
 ---
 
 ## Technologies Used
 
 - Python 3.10+
-- Tesseract OCR
-- OpenCV
+- Tesseract OCR, OpenCV, pdfplumber
 - FAISS
 - Ollama (local LLM runner)
 - nomic-embed-text
-- Open-source LLMs (phi4-mini, mistral, etc.)
+- Open-source local LLMs only
 
 ---
 
 ## Why Offline & Open-Source?
 
-- Avoid API rate limits
-- Avoid legal data leakage
-- Full control over embeddings and inference
-- Reproducible pipeline
-- Cost-effective for large legal corpora
+- No API rate limits
+- No data leakage - your PDFs never leave your computer
+- Full control over embeddings and answers
+- Reproducible
+- Cheap for large document sets
 
 ---
 
 ## Project Status
 
-- OCR extraction: ✅ Complete
-- Text correction: ✅ Complete
+- Text extraction: ✅ Complete
+- OCR correction: ✅ Complete
 - Chunking: ✅ Complete
-- Vector index: ✅ Built
-- RAG querying: 🧪 Testing / tuning
+- Embeddings: ✅ Complete
+- FAISS index: ✅ Complete
+- Query / RAG: 🧪 Testing / tuning
+
+---
+
+## Limitations
+
+- Answer quality depends on scan quality
+- Tables may lose some visual structure
+- Tool finds text, it does not interpret or advise
+- Always verify against your original PDFs
 
 ---
 
 ## Disclaimer
 
-This system provides **text retrieval only** from legal documents.  
-It does **not** provide legal advice or interpretation.
+This tool only retrieves text from documents you give it.
+
+It does not give legal advice, medical advice, or any professional advice.
+
+For the Karnataka legal test: verify all answers against official Acts.
 
 ---
 
-## Architecture Overview
+## Repo Map
 
-PDFs
- ↓
-OCR + Native Text Extraction
- ↓
-LLM-based OCR Correction (Ollama)
- ↓
-Recursive + Semantic Chunking
- ↓
-Local Embeddings (nomic)
- ↓
-FAISS Vector Index
- ↓
-RAG Query Pipeline
- ↓
-Local LLM Answer (Verbatim Legal Text)
-
----
-
-
----
-
-## Pipeline Details
-
-### 1. OCR and Text Extraction
-- Uses `pdfplumber`, `pytesseract`, OpenCV, and PIL
-- Handles:
-  - Image-only PDFs
-  - Mixed image + text pages
-  - Tables and structured layouts
-  - Portrait and landscape orientations
-
-**Script:** `scripts/ocr_ai.py`
-
----
-
-### 2. LLM-based OCR Error Correction (Offline)
-OCR output may contain errors such as:
-- `rn` → `m`
-- `cl` → `d`
-- Broken or merged words
-
-These are corrected using **open-source LLMs via Ollama**, avoiding paid APIs due to rate limits and reliability issues.
-
-**Script:** `scripts/ocr_ai.py`  
-**Models used:** `phi4-mini`, `mistral` (local via Ollama)
-
----
-
-### 3. Recursive + Semantic Chunking
-Legal text is chunked using:
-- Section and subsection boundaries
-- Clause-aware splitting
-- Token-length constraints
-
-This preserves legal structure for accurate retrieval.
-
-**Script:** `scripts/chunk_text.py`
-
----
-
-### 4. Local Embedding Generation
-- Embeddings generated **offline**
-- Uses `nomic-embed-text` via Ollama
-- One embedding per legal chunk
-
-**Script:** `scripts/embed_chunks.py`
-
----
-
-### 5. FAISS Vector Index Creation
-- Embeddings are stored in a local FAISS index
-- Metadata (chunk text + source info) stored separately
-- No external vector database is used
-
-**Script:** `scripts/build_faiss.py`
-
-**Generated outputs (intentionally NOT committed to Git):**
-- `legal_index.faiss`
-- `legal_meta.json`
-
----
-
-### 6. Legal Question Answering (RAG)
-- User question is embedded
-- FAISS similarity search retrieves relevant chunks
-- Retrieved text is passed to a local LLM with a **strict legal prompt**
-
-The LLM is instructed to:
-- Use **only the retrieved legal text**
-- Quote **verbatim** from the Act
-- Respond with **“Not found in provided documents”** if the answer is missing
-- Avoid paraphrasing or legal interpretation
-
-**Script:** `scripts/legal_rag.py`
-
----
-
-## RAG Prompt Philosophy (Safety-Critical)
-
-The system enforces:
-- No hallucinations
-- No external legal knowledge
-- No summarization or rewording
-- Exact quoting with original numbering and punctuation
-
-This makes the system suitable for **legal text retrieval**, not legal advice.
-
----
-
-## Running the Full Pipeline (Reproducibility)
-
-The scripts must be executed in the following order **on a fresh system**.
-
-### Step 1: OCR and Text Extraction
-python scripts/ocr_ai.py
-### Step 2: Chunk Legal Text
-python scripts/chunk_text.py
-### Step 3: Generate Embeddings (Offline)
-python scripts/embed_chunks.py
-### Step 4: Build FAISS Vector Index
-python scripts/build_faiss.py
-### Step 5: Query the Legal RAG System
-python scripts/legal_rag.py
-
-### Note: Generated files are ignored via .gitignore and must be regenerated locally.
-
-### Running on RunPod (GPU)
-Recommended for faster OCR correction and embedding generation.
-
-### Environment
- - PyTorch 2.2
- - CUDA 12+
- - GPU (RTX 4090 recommended)
-
-### Setup
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama serve
-ollama pull phi4-mini
-ollama pull nomic-embed-text
-pip install -r requirements.txt
-```
-
-### Technologies Used
- - Python 3.10+
- - Tesseract OCR
- - OpenCV
- - pdfplumber
- - FAISS
- - Ollama (local LLM runtime)
- - nomic-embed-text
- - Open-source LLMs only
-
-### Why Offline & Open-Source?
- -Avoids API rate limits and failures
- - Prevents legal data leakage
- - Full control over embeddings and inference
- - Cost-effective for large legal corpora
- - Fully reproducible pipeline
-
-### Project Status
- - OCR extraction: ✅ Complete
- - OCR correction: ✅ Complete
- - Semantic chunking: ✅ Complete
- - Embeddings: ✅ Generated
- - FAISS index: ✅ Built
- - RAG querying: 🧪 Testing and tuning
-
-### Limitations
- - OCR accuracy depends on scan quality
- - Tables may lose some visual structure
- - The system retrieves text but does not interpret law
- - No legal advice is provided
-   
-### Disclaimer
-This project is intended for legal text retrieval and research assistance only.
-It does not provide legal advice, opinions, or interpretations.
-Users must verify all information against official legal sources.
-
-
-
-
+- `legal-rag-system` (this repo) = Main engine. Generic. Works with any subject.
+- `karnataka-legal-rag-assistant` = Colab demo of this engine, using Karnataka legal as test data.
